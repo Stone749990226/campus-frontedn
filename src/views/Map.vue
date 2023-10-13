@@ -3,6 +3,8 @@ import AMapLoader from '@amap/amap-jsapi-loader';
 import {onUnmounted, onMounted, ref} from 'vue'
 let map = null;
 let contents = [];
+let infoText = ref("请选择你想参观的大学")
+let inputCardShow = ref(false)
 const locationList = {
   "北京大学":[116.310547, 39.992828],
   "清华大学":[116.33337, 40.0096],
@@ -68,6 +70,24 @@ const data = [
     like:"88"
   }
 ]
+const travelRoutes = [
+  {
+    id: 1,
+    schoolId: 1,//1为哈工大深圳
+    name: "游览路线1",
+    waypoints:[
+        [113.968268,22.586219],//西南门
+        [113.971663,22.585467],//四食堂
+        // [113.972663,22.589743],//北大汇丰商学院
+        // [113.972539,22.591474],//大学城图书馆
+        // [113.968874,22.591402],//清华伯克利
+        // [113.967868,22.591112],//清华大学体育场
+        // [113.96782,22.592942],//清华荷园一食堂
+        // [113.971592,22.592255],//清华海洋楼
+        [113.979454,22.592114],//北大燕园1食堂
+    ],
+  }
+]
 // console.log(data[1]);
 for(let i = 0; i <data.length;i++) {
   contents.push(`
@@ -98,11 +118,12 @@ for(let i = 0; i <data.length;i++) {
 
     `)
 }
+
 onMounted(() => {
   AMapLoader.load({
     key: "7ad8e8a4ce22a418db938bf71e7ede1e", // 申请好的Web端开发者Key，首次调用 load 时必填
     version: "2.0", // 指定要加载的 JSAPI 的版本，缺省时默认为 1.4.15
-    plugins: ["AMap.Marker"], // 需要使用的的插件列表，如比例尺'AMap.Scale'等
+    plugins: ["AMap.Marker","AMap.Walking","AMap.LngLat"], // 需要使用的的插件列表，如比例尺'AMap.Scale'等
   })
   .then((AMap) => {
     map = new AMap.Map("container", {
@@ -111,38 +132,74 @@ onMounted(() => {
       zoom: 4.5, // 初始化地图级别
       center: [116.397428, 39.90923], // 初始化地图中心点位置
     });
+    let schools = []
     for(let i = 0; i < data.length; i++){
-      let trees = new AMap.Marker({
+      let school = new AMap.Marker({
         position: locationList[data[i].school],
         content: contents[i],
       });
-      map.add(trees);
+      school.on("click",function (e){
+        map.setZoomAndCenter(17,locationList[data[i].school]);
+        map.remove(schools);
+        infoText.value = "您正在浏览的是:" + data[i].school;
+        inputCardShow.value = true;
+      })
+      schools.push(school);
     }
+    map.add(schools);
   })
   .catch((e) => {
     console.log(e);
   });
-
 });
 
 onUnmounted(() => {
   map?.destroy();
 });
 
+let startWalkingSearch = function(){
+  var walkOption = {
+    map: map,
+    hideMarkers: true,
+    isOutline:false,
+  };
+
+  let results = [];
+  let walkings = [];
+  for(let i = 0; i < travelRoutes[0].waypoints.length-1; i++) {
+    let walking = new AMap.Walking(walkOption);
+    walkings.push(walking);
+    walking.search(travelRoutes[0].waypoints[i], travelRoutes[0].waypoints[i+1], function (status, result) {
+      // result即是对应的不行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_RidingResult
+      if (status === "complete") {
+        console.log(i+":步行路线数据查询成功");
+        results.push(result.routes[0]);
+      } else {
+        console.log("步行路线数据查询失败" + result);
+      }
+    });
+  }
+  // walking.clear();
+  console.log("--------------------");
+  console.log(results);
+  console.log("--------------------");
+
+}
 </script>
 
 <template>
-  <div>
+  <div class="map">
     <div id="container">
-<!--      <div class="marker">-->
-<!--        <img src="https://pic.c-ctrip.com/flight/fuzzy/DLC/640.jpg" alt="大连">-->
-<!--      </div>-->
-
-
-
-
     </div>
-
+    <div class="info">{{ infoText }}</div>
+    <div class="input-card" v-show="inputCardShow">
+      <h4>推荐路线</h4>
+      <div class="input-item" >
+        <button class="btn" @click="startWalkingSearch()">游览路线1</button>
+        <button class="btn" @click="startWalkingSearch()">游览路线2</button>
+        <button class="btn" @click="test()">游览路线3</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -154,26 +211,57 @@ onUnmounted(() => {
   width: 100%;
   height: 600px;
 }
-//.marker{
-//  position:relative;
-//  left: 349px;
-//  top: 177px;
-//  z-index: 10;
-//  transform: translate(0, -100%);
-//  cursor: pointer;
-//  display: flex;
-//  width: 140px;
-//  border-radius: 4px;
-//  box-shadow: 0px 4px 20px 2px rgba(0, 0, 0, 0.12);
-//  overflow: hidden;
-//  border: none;
-//  img{
-//    height: 62px;
-//    width: 62px;
-//    display: block;
-//    margin-right: 12px;
-//    border-radius: 4px 0 0 4px;
-//    object-fit: cover;
-//  }
-//}
+.map {
+  position:relative;
+  .info {
+    position:absolute;
+    right: 10px;
+    top:5px;
+    padding: 7px 7px;
+    border-radius: .25rem;
+    background-color: white;
+    border-width: 0;
+    box-shadow: 0 2px 6px 0 rgba(114, 124, 245, .5);
+    font-size:12px;
+    text-align:center;
+  }
+  .input-card {
+    position:absolute;
+    right: 10px;
+    bottom: 10px;
+    min-width: 0;
+    word-wrap: break-word;
+    background-color: #fff;
+    background-clip: border-box;
+    border-radius: .25rem;
+    width: 80px;
+    border-width: 0;
+    box-shadow: 0 2px 6px 0 rgba(114, 124, 245, .5);
+    -ms-flex: 1 1 auto;
+    flex: 1 1 auto;
+    padding: 5px 5px;
+    text-align: center;
+    font-size: 14px;
+    button {
+      display: inline-block;
+      margin-top: 5px;
+      font-weight: 400;
+      text-align: center;
+      white-space: nowrap;
+      vertical-align: middle;
+      transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+      background-color: transparent;
+      background-image: none;
+      color: #25A5F7;
+      border: 1px solid #25A5F7;
+      padding: 1px 5px;
+      border-radius: 1rem;
+      cursor: pointer;
+    }
+    button:hover {
+      color: white;
+      background-color: #25A5F7;
+    }
+  }
+}
 </style>
